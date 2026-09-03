@@ -1,0 +1,17 @@
+# Prometheus 抓取配置（本项目的指标在 /actuator/prometheus）
+# 用法：./prometheus --config.file=prometheus.yml
+# 注意：targets 用 localhost，假设 Prometheus 与 app 跑在同一台宿主机上。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'spring-ai-docs-rag'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['localhost:8080']
+
+  # Jaeger all-in-one 的 OTel Collector 指标（8888/metrics）
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['localhost:8888']

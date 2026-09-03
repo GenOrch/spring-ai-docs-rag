@@ -1,0 +1,102 @@
+[
+  {
+    "question": "How do I create a ChatClient in Spring AI?",
+    "mustContain": ["ChatClient.builder"],
+    "sourceContains": ["chatclient"]
+  },
+  {
+    "question": "What is the TokenTextSplitter used for?",
+    "mustContain": ["TokenTextSplitter"],
+    "sourceContains": ["etl"]
+  },
+  {
+    "question": "How does RetrievalAugmentationAdvisor work?",
+    "mustContain": ["RetrievalAugmentationAdvisor"],
+    "sourceContains": ["retrieval-augmented-generation"]
+  },
+  {
+    "question": "Which vector databases does Spring AI support?",
+    "mustContain": ["pgvector", "Milvus"],
+    "sourceContains": ["vectordbs"]
+  },
+  {
+    "question": "What is an Advisor in Spring AI?",
+    "mustContain": ["Advisor"],
+    "sourceContains": ["advisors"]
+  },
+  {
+    "question": "How do I define a tool for function calling?",
+    "mustContain": ["ToolCallback"],
+    "sourceContains": ["tools"]
+  },
+  {
+    "question": "How do I store chat conversation history?",
+    "mustContain": ["ChatMemory"],
+    "sourceContains": ["chat-memory"]
+  },
+  {
+    "question": "Which embedding models does Spring AI support?",
+    "mustContain": ["EmbeddingModel"],
+    "sourceContains": ["embedding"]
+  },
+  {
+    "question": "What is the ETL pipeline in Spring AI?",
+    "mustContain": ["DocumentReader", "TokenTextSplitter"],
+    "sourceContains": ["etl-pipeline"]
+  },
+  {
+    "question": "How do I test Spring AI applications?",
+    "mustContain": ["Evaluator"],
+    "sourceContains": ["testing"]
+  },
+  {
+    "question": "如何在 Spring AI 中创建 ChatClient？",
+    "mustContain": ["ChatClient.builder"],
+    "sourceContains": ["chatclient"]
+  },
+  {
+    "question": "Spring AI 支持哪些向量数据库？",
+    "mustContain": ["pgvector"],
+    "sourceContains": ["vectordbs"]
+  },
+  {
+    "question": "How do I use prompt templates in Spring AI?",
+    "mustContain": ["PromptTemplate"],
+    "sourceContains": ["prompt"]
+  },
+  {
+    "question": "Does Spring AI support multimodal models?",
+    "mustContain": ["Modality"],
+    "sourceContains": ["multimodality"]
+  },
+  {
+    "question": "How do I convert the model response to a structured type?",
+    "mustContain": ["BeanOutputConverter"],
+    "sourceContains": ["structured-output"]
+  },
+  {
+    "question": "What is the difference between naive and advanced RAG?",
+    "mustContain": ["re-ranking"],
+    "sourceContains": ["retrieval-augmented-generation"]
+  },
+  {
+    "question": "How do I set the model options for ChatClient?",
+    "mustContain": ["ChatOptions"],
+    "sourceContains": ["chatclient"]
+  },
+  {
+    "question": "What is MessageChatMemory used for?",
+    "mustContain": ["MessageChatMemory"],
+    "sourceContains": ["chat-memory"]
+  },
+  {
+    "question": "How do I observe and monitor Spring AI operations?",
+    "mustContain": ["Observation"],
+    "sourceContains": ["observability"]
+  },
+  {
+    "question": "Spring AI 有哪些核心特性？",
+    "mustContain": ["Advisor", "Tool"],
+    "sourceContains": ["index"]
+  }
+]

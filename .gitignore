@@ -1,0 +1,31 @@
+# build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# local secrets — real keys/passwords go here, never committed
+.env
+.venv/
+
+# logs
+*.log
+
+# local temp files
+.feishu.json
+.ask.json
+.mcp-*.json
+.mcp-hdr.txt
+
+# runtime data (AsciiDoc corpus + SQLite conversations + audit logs)
+data/
+
+# internal docs — kept locally, not published
+docs/HANDOFF.md
+docs/PITFALLS.md
+docs/INTERVIEW.md

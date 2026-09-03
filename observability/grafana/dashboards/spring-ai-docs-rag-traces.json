@@ -1,0 +1,62 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false }, "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum by (transport) (rate(otelcol_receiver_accepted_spans[5m]))", "legendFormat": "accepted({{transport}})", "range": true, "refId": "A" }
+      ],
+      "title": "Span 接收速率（OTLP）", "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false }, "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(rate(otelcol_receiver_refused_spans[5m]))", "legendFormat": "refused", "range": true, "refId": "A" }
+      ],
+      "title": "Span 拒绝数（丢失）", "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "rate(jaeger_storage_latency_sum[5m]) / rate(jaeger_storage_latency_count[5m])", "legendFormat": "存储查询延迟 (avg)", "range": true, "refId": "A" }
+      ],
+      "title": "Jaeger 存储查询延迟", "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "id": 4,
+      "options": {
+        "content": "### 追踪详情（span 树）\n\n完整调用链（`/ask → rag.retrieve → embedding → rag.rerank → chat`）在 Jaeger UI 查看：\n\n**[打开 Jaeger UI](http://localhost:16686/search?service=spring-ai-docs-rag)**  ← 点击直达\n\n> 说明：Grafana 的 Jaeger 数据源（Tempo 内核）search 查询与 Jaeger all-in-one 后端不兼容（`/api/search` vs `/api/traces`），故 trace 列表在 Jaeger UI 查看；Grafana **Explore** 中可按 traceID 查单条 trace。",
+        "mode": "markdown"
+      },
+      "title": "追踪入口",
+      "type": "text"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["spring-ai-docs-rag", "traces", "jaeger"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Spring AI RAG · 追踪",
+  "uid": "spring-ai-docs-rag-traces",
+  "version": 1
+}

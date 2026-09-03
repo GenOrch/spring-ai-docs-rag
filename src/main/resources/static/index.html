@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spring AI RAG · 问答演示</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a22; --panel2: #1c212b; --border: #2a303c;
+    --fg: #e7eaf0; --dim: #8b93a7; --accent: #4c8dff; --accent2: #6ba6ff;
+    --code-bg: #0a0c10; --danger: #f47067;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+         background: var(--bg); color: var(--fg); line-height: 1.6; overflow: hidden; }
+  button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #2c3442; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4454; }
+
+  .app { display: flex; height: 100vh; }
+
+  .sidebar { width: 264px; min-width: 264px; background: var(--panel); border-right: 1px solid var(--border);
+             display: flex; flex-direction: column; }
+  .sidebar-head { padding: 14px 14px 10px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+  .brand .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), #7a5cff);
+                 display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .sb-actions { display: flex; gap: 8px; }
+  .sb-actions button { flex: 1; border: 1px solid var(--border); background: var(--panel2); color: var(--fg);
+                       border-radius: 8px; padding: 9px 10px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .sb-actions button:hover { border-color: var(--accent); background: #222936; }
+  .sb-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .sb-actions button.primary:hover { background: var(--accent2); }
+  .search { margin: 10px 14px; }
+  .search input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--fg);
+                  border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+  .search input:focus { outline: none; border-color: var(--accent); }
+  .sidebar-scroll { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+
+  .folder { margin-bottom: 6px; }
+  .folder-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px;
+                 cursor: pointer; color: var(--dim); font-size: 12.5px; user-select: none; }
+  .folder-head:hover { background: var(--panel2); }
+  .folder-head .caret { transition: transform .15s; font-size: 10px; }
+  .folder-head.open .caret { transform: rotate(90deg); }
+  .folder-head .name { flex: 1; font-weight: 600; }
+  .folder-head .del { opacity: 0; border: 0; background: none; color: var(--dim); cursor: pointer; font-size: 13px; }
+  .folder-head:hover .del { opacity: 1; }
+  .folder-head .del:hover { color: var(--danger); }
+
+  .conv { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+          color: var(--fg); font-size: 13.5px; position: relative; }
+  .conv:hover { background: var(--panel2); }
+  .conv.active { background: #24304a; }
+  .conv .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv .menu-btn { opacity: 0; border: 0; background: none; color: var(--dim); cursor: pointer; font-size: 14px; padding: 2px 4px; }
+  .conv:hover .menu-btn, .conv.active .menu-btn { opacity: 1; }
+  .conv .menu-btn:hover { color: var(--fg); }
+  .empty-side { color: var(--dim); font-size: 12.5px; text-align: center; padding: 20px 8px; }
+
+  .menu { position: fixed; z-index: 100; background: var(--panel2); border: 1px solid var(--border);
+          border-radius: 10px; padding: 5px; min-width: 160px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .menu .mi { padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .menu .mi:hover { background: var(--border); }
+  .menu .mi.danger { color: var(--danger); }
+  .menu .mi.sub { display: flex; align-items: center; justify-content: space-between; }
+  .menu .sep { height: 1px; background: var(--border); margin: 5px 4px; }
+  .sidebar-foot { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--dim); font-size: 11.5px; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .main-head { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border);
+               background: var(--panel); }
+  .main-head .title { font-size: 15px; font-weight: 650; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main-head select { background: var(--bg); border: 1px solid var(--border); color: var(--fg); border-radius: 8px;
+                      padding: 6px 10px; font-size: 12.5px; }
+  .main-head .icon-btn { border: 1px solid var(--border); background: var(--panel2); color: var(--dim); border-radius: 8px;
+                         width: 30px; height: 30px; cursor: pointer; font-size: 14px; }
+  .main-head .icon-btn:hover { color: var(--fg); border-color: var(--accent); }
+
+  .chat-scroll { flex: 1; overflow-y: auto; }
+  .chat-inner { max-width: 820px; margin: 0 auto; padding: 24px 20px 32px; display: flex; flex-direction: column; gap: 22px; }
+
+  .welcome { flex: 1; overflow-y: auto; display: flex; align-items: center; justify-content: center; }
+  .welcome-inner { text-align: center; max-width: 560px; padding: 20px; }
+  .welcome-inner .big { font-size: 26px; font-weight: 700; margin: 0 0 8px; }
+  .welcome-inner .sub { color: var(--dim); font-size: 14px; margin: 0 0 28px; }
+  .suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sug { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+         text-align: left; color: var(--fg); cursor: pointer; font-size: 13.5px; transition: all .15s; }
+  .sug:hover { border-color: var(--accent); background: var(--panel2); }
+  .sug .t { font-weight: 600; margin-bottom: 4px; }
+  .sug .d { color: var(--dim); font-size: 12px; }
+
+  .msg { display: flex; gap: 12px; }
+  .msg .avatar { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: flex;
+                 align-items: center; justify-content: center; font-size: 15px; }
+  .msg.user .avatar { background: linear-gradient(135deg, var(--accent), #7a5cff); }
+  .msg.assistant .avatar { background: var(--panel2); border: 1px solid var(--border); }
+  .msg .body { flex: 1; min-width: 0; }
+  .msg .who { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  .msg.user { flex-direction: row-reverse; }
+  .msg.user .body { display: flex; flex-direction: column; align-items: flex-end; }
+  .msg.user .bubble { background: var(--accent); color: #fff; border-radius: 14px 14px 4px 14px; padding: 10px 14px;
+                      max-width: 78%; white-space: pre-wrap; word-break: break-word; font-size: 14.5px; }
+  .msg.assistant .bubble { background: var(--panel); border: 1px solid var(--border); border-radius: 4px 14px 14px 14px;
+                           padding: 14px 16px; font-size: 14.5px; }
+  .msg.assistant .bubble h2, .msg.assistant .bubble h3, .msg.assistant .bubble h4 { margin: 14px 0 8px; line-height: 1.4; }
+  .msg.assistant .bubble h2 { font-size: 16px; } .msg.assistant .bubble h3 { font-size: 15px; } .msg.assistant .bubble h4 { font-size: 14px; }
+  .msg.assistant .bubble p { margin: 8px 0; }
+  .msg.assistant .bubble code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+                 padding: 1px 6px; font-size: 13px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .msg.assistant .bubble pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+                padding: 12px 14px; overflow-x: auto; }
+  .msg.assistant .bubble pre code { background: none; border: 0; padding: 0; font-size: 13px; }
+  .msg.assistant .bubble ul, .msg.assistant .bubble ol { margin: 8px 0; padding-left: 22px; }
+  .msg.assistant .bubble strong { font-weight: 650; }
+  .msg.assistant .bubble .cite { font-size: 11px; }
+  .msg.assistant .bubble .cite a { color: var(--accent2); text-decoration: none; font-weight: 700; }
+  .msg.assistant .bubble .cite a:hover { text-decoration: underline; }
+  .msg .cursor { display: inline-block; color: var(--accent); animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .msg .tools { display: flex; gap: 6px; margin-top: 6px; opacity: 0; transition: opacity .15s; }
+  .msg:hover .tools { opacity: 1; }
+  .msg .tools button { border: 1px solid var(--border); background: var(--panel2); color: var(--dim); border-radius: 6px;
+                       padding: 3px 8px; font-size: 11.5px; cursor: pointer; }
+  .msg .tools button:hover { color: var(--fg); border-color: var(--accent); }
+
+  .sources { margin-top: 10px; }
+  .sources .sh { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 8px; }
+  .source { display: flex; gap: 8px; align-items: baseline; background: var(--panel); border: 1px solid var(--border);
+            border-radius: 8px; padding: 7px 12px; margin: 5px 0; font-size: 12.5px; }
+  .source sup { color: var(--accent2); font-weight: 700; }
+  .source a { color: var(--accent); text-decoration: none; word-break: break-all; }
+  .source a:hover { text-decoration: underline; }
+  .source .ver { color: var(--dim); white-space: nowrap; }
+
+  .composer-wrap { padding: 12px 20px 16px; }
+  .composer { max-width: 820px; margin: 0 auto; background: var(--panel); border: 1px solid var(--border);
+              border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .composer:focus-within { border-color: var(--accent); }
+  textarea { width: 100%; background: transparent; border: 0; color: var(--fg); resize: none; min-height: 52px;
+             max-height: 180px; font-size: 14.5px; font-family: inherit; line-height: 1.5; padding: 4px; }
+  textarea:focus { outline: none; }
+  .composer .row { display: flex; align-items: center; gap: 10px; }
+  .composer select { background: var(--bg); border: 1px solid var(--border); color: var(--fg); border-radius: 8px;
+                     padding: 6px 10px; font-size: 12.5px; }
+  .composer .spacer { flex: 1; }
+  .composer .hint { color: var(--dim); font-size: 11.5px; }
+  .composer button.send { background: var(--accent); color: #fff; border: 0; border-radius: 9px; padding: 9px 22px;
+                          font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .composer button.send:hover:not(:disabled) { background: var(--accent2); }
+  .composer button.send:disabled { opacity: .45; cursor: default; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="brand"><span class="logo">🧠</span> Spring AI RAG</div>
+      <div class="sb-actions">
+        <button class="primary" id="newChatBtn">＋ 新对话</button>
+        <button id="newFolderBtn">📁 文件夹</button>
+      </div>
+    </div>
+    <div class="search"><input id="searchInput" placeholder="搜索会话…"></div>
+    <div class="sidebar-scroll" id="sidebarScroll"></div>
+    <div class="sidebar-foot" id="sidebarFoot">加载中…</div>
+  </aside>
+
+  <main class="main">
+    <div class="main-head" id="mainHead" style="display:none">
+      <span class="title" id="mainTitle">对话</span>
+      <select id="versionSel">
+        <option value="">全部版本</option>
+        <option value="2.0.1">v2.0.1</option>
+        <option value="1.1.8">v1.1.8</option>
+      </select>
+      <button class="icon-btn" id="renameBtn" title="重命名">✎</button>
+      <button class="icon-btn" id="deleteConvBtn" title="删除会话">🗑</button>
+    </div>
+
+    <div class="welcome" id="welcome">
+      <div class="welcome-inner">
+        <p class="big">向 Spring AI 文档提问</p>
+        <p class="sub">混合检索（向量 + BM25 + RRF）→ 重排 → Qwen 带引用生成，支持多轮追问</p>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+    </div>
+
+    <div class="chat-scroll" id="chatScroll" style="display:none">
+      <div class="chat-inner" id="chatInner"></div>
+    </div>
+
+    <div class="composer-wrap" id="composerWrap" style="display:none">
+      <div class="composer">
+        <textarea id="q" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+        <div class="row">
+          <select id="versionSel2">
+            <option value="">全部版本</option>
+            <option value="2.0.1">v2.0.1</option>
+            <option value="1.1.8">v1.1.8</option>
+          </select>
+          <span class="hint" id="hint">多轮追问：同一会话内可引用上文</span>
+          <span class="spacer"></span>
+          <button class="send" id="askBtn">发送</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ==================== 状态（服务端 SQLite 为唯一数据源） ====================
+let folders = [];
+let conversations = [];
+let activeId = null;
+let messages = [];        // 当前会话的消息（从 API 加载 / 本地流式追加）
+let curMsg = null;        // 当前流式中的 AI 消息对象
+let sending = false;
+let renderScheduled = false;
+
+const sidebarScroll = document.getElementById('sidebarScroll');
+const chatScroll = document.getElementById('chatScroll');
+const chatInner = document.getElementById('chatInner');
+const welcome = document.getElementById('welcome');
+const composerWrap = document.getElementById('composerWrap');
+const mainHead = document.getElementById('mainHead');
+const mainTitle = document.getElementById('mainTitle');
+const q = document.getElementById('q');
+const askBtn = document.getElementById('askBtn');
+const hint = document.getElementById('hint');
+const searchInput = document.getElementById('searchInput');
+
+const SUGGESTIONS = [
+  { t: 'ChatClient 是什么？', d: 'Spring AI 的核心对话入口', q: 'How does ChatClient work?' },
+  { t: '什么是 RAG？', d: 'Spring AI 的检索增强生成', q: 'Explain how RAG works in Spring AI' },
+  { t: 'Advisors 有哪些？', d: '问答/检索/工具调用等', q: 'What advisors does Spring AI provide?' },
+  { t: '如何做向量检索？', d: 'VectorStore 与相似度搜索', q: 'How do I do vector search with VectorStore?' },
+];
+
+// ==================== API 辅助 ====================
+async function api(path, options = {}) {
+  const resp = await fetch('/api' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  if (resp.status === 204) return null;
+  return resp.json();
+}
+
+// ==================== 渲染 ====================
+function renderSidebar() {
+  const kw = searchInput.value.trim().toLowerCase();
+  const visible = c => !kw || (c.title || '').toLowerCase().includes(kw);
+  let html = '';
+  const openIds = new Set(folders.filter(f => f._open).map(f => f.id));
+
+  for (const f of folders) {
+    const convs = conversations.filter(c => c.folderId === f.id && visible(c));
+    html += `<div class="folder" data-folder="${f.id}">
+      <div class="folder-head ${openIds.has(f.id) ? 'open' : ''}" data-folder-toggle="${f.id}">
+        <span class="caret">▶</span><span class="name">📁 ${esc(f.name)}</span>
+        <button class="del" data-folder-del="${f.id}" title="删除文件夹">✕</button>
+      </div>`;
+    if (openIds.has(f.id)) {
+      html += convs.map(convItem).join('') || '<div class="empty-side">（空）</div>';
+    }
+    html += `</div>`;
+  }
+
+  const ungrouped = conversations.filter(c => !c.folderId && visible(c));
+  html += ungrouped.map(convItem).join('');
+  if (!html) html = '<div class="empty-side">还没有会话，点「新对话」开始</div>';
+
+  sidebarScroll.innerHTML = html;
+  document.getElementById('sidebarFoot').textContent =
+    `${conversations.length} 个会话 · ${folders.length} 个文件夹`;
+}
+
+function convItem(c) {
+  const active = c.id === activeId ? ' active' : '';
+  return `<div class="conv${active}" data-conv="${c.id}">
+    <span class="title">${esc(c.title || '新对话')}</span>
+    <button class="menu-btn" data-conv-menu="${c.id}" title="更多">⋯</button>
+  </div>`;
+}
+
+function renderMain() {
+  if (!activeId) {
+    welcome.style.display = 'flex';
+    chatScroll.style.display = 'none';
+    composerWrap.style.display = 'none';
+    mainHead.style.display = 'none';
+    return;
+  }
+  welcome.style.display = 'none';
+  chatScroll.style.display = 'block';
+  composerWrap.style.display = 'block';
+  mainHead.style.display = 'flex';
+  const c = conversations.find(x => x.id === activeId);
+  mainTitle.textContent = (c && c.title) || '新对话';
+  document.getElementById('versionSel').value = (c && c.version) || '';
+  document.getElementById('versionSel2').value = (c && c.version) || '';
+  renderMessages();
+}
+
+function renderMessages() {
+  if (!messages.length) {
+    chatInner.innerHTML = '<div class="empty-side">开始提问吧，第一句会成为会话标题</div>';
+    return;
+  }
+  chatInner.innerHTML = messages.map((m, i) => renderMessage(m, i === messages.length - 1 && m.streaming)).join('');
+  scrollBottom();
+}
+
+function renderMessage(m, streaming) {
+  if (m.role === 'user') {
+    return `<div class="msg user"><div class="avatar">👤</div>
+      <div class="body"><div class="who">你</div><div class="bubble">${esc(m.content)}</div></div></div>`;
+  }
+  const sources = m.sources || [];
+  const srcHtml = sources.length
+    ? `<div class="sources"><div class="sh">Sources</div>` + sources.map((s, i) =>
+        `<div class="source"><sup>[${i + 1}]</sup> <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.version ? `<span class="ver">(v${esc(s.version)})</span>` : ''}</div>`
+      ).join('') + `</div>` : '';
+  const cursor = streaming ? '<span class="cursor">▌</span>' : '';
+  return `<div class="msg assistant"><div class="avatar">🧠</div>
+    <div class="body"><div class="who">AI 回答</div>
+      <div class="bubble">${renderMarkdown(m.content, sources)}${cursor}</div>
+      ${srcHtml}
+      <div class="tools"><button onclick="copyMsg(this)">复制</button></div>
+    </div></div>`;
+}
+
+function scrollBottom() { chatScroll.scrollTop = chatScroll.scrollHeight; }
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ==================== Markdown 渲染 ====================
+function renderMarkdown(text, sources) {
+  const parts = String(text || '').split(/```/);
+  let html = '';
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) html += renderBlocks(parts[i], sources);
+    else html += '<pre><code>' + esc(parts[i].replace(/^[^\n]*\n/, '')) + '</code></pre>';
+  }
+  return html;
+}
+function renderBlocks(text, sources) {
+  return String(text).split(/\n{2,}/).map(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (!lines.length) return '';
+    if (/^[-*•]\s+/.test(lines[0])) {
+      return '<ul>' + lines.map(l => '<li>' + renderInline(l.replace(/^[-*•]\s+/, ''), sources) + '</li>').join('') + '</ul>';
+    }
+    const h = lines[0].match(/^#{1,4}\s+(.+)$/);
+    if (h) {
+      const rest = lines.slice(1).map(l => renderInline(l, sources)).join('<br>');
+      return '<h3>' + renderInline(h[1], sources) + '</h3>' + (rest ? '<p>' + rest + '</p>' : '');
+    }
+    return '<p>' + lines.map(l => renderInline(l, sources)).join('<br>') + '</p>';
+  }).join('');
+}
+function renderInline(text, sources) {
+  let t = esc(text);
+  const codeSpans = [];
+  t = t.replace(/`([^`]+)`/g, (m, code) => { codeSpans.push(code); return '\u0000' + (codeSpans.length - 1) + '\u0000'; });
+  t = t.replace(/\[(\d+)\]/g, (m, n) => {
+    const src = (sources || [])[parseInt(n, 10) - 1];
+    return src ? `<sup class="cite"><a href="${esc(src.url)}" target="_blank" rel="noopener">[${n}]</a></sup>` : `<sup class="cite">[${n}]</sup>`;
+  });
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/\u0000(\d+)\u0000/g, (m, i) => '<code>' + esc(codeSpans[+i]) + '</code>');
+  return t;
+}
+
+// ==================== 会话操作（API） ====================
+async function newConversation() {
+  const c = await api('/conversations', { method: 'POST', body: '{}' });
+  conversations.unshift(c);
+  activeId = c.id;
+  messages = [];
+  renderAll();
+  q.focus();
+}
+
+async function selectConversation(id) {
+  if (id === activeId && messages.length) return;
+  activeId = id;
+  renderMain();
+  try {
+    const data = await api('/conversations/' + id);
+    messages = data.messages || [];
+    renderMessages();
+  } catch (e) {
+    messages = [];
+    renderMessages();
+  }
+}
+
+async function renameConversation(id) {
+  const c = conversations.find(x => x.id === id);
+  const name = prompt('会话名称：', c ? c.title : '');
+  if (name && name.trim()) {
+    await api('/conversations/' + id, { method: 'PATCH', body: JSON.stringify({ title: name.trim() }) });
+    if (c) c.title = name.trim();
+    renderSidebar(); renderMain();
+  }
+}
+
+async function deleteConversation(id) {
+  if (!confirm('删除该会话？')) return;
+  await api('/conversations/' + id, { method: 'DELETE' });
+  conversations = conversations.filter(c => c.id !== id);
+  if (activeId === id) {
+    activeId = conversations[0] ? conversations[0].id : null;
+    messages = [];
+    if (activeId) await selectConversation(activeId);
+    else renderAll();
+  } else {
+    renderSidebar();
+  }
+}
+
+async function newFolder() {
+  const name = prompt('文件夹名称：');
+  if (name && name.trim()) {
+    const f = await api('/folders', { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
+    f._open = true;
+    folders.push(f);
+    renderSidebar();
+  }
+}
+
+async function deleteFolder(id) {
+  if (!confirm('删除文件夹？（会话不会删除，移到未分组）')) return;
+  await api('/folders/' + id, { method: 'DELETE' });
+  folders = folders.filter(f => f.id !== id);
+  conversations.forEach(c => { if (c.folderId === id) c.folderId = null; });
+  renderSidebar();
+}
+
+async function moveConversation(id, folderId) {
+  await api('/conversations/' + id, { method: 'PATCH', body: JSON.stringify({ folderId: folderId || null }) });
+  const c = conversations.find(x => x.id === id);
+  if (c) c.folderId = folderId || null;
+  renderSidebar();
+}
+
+function copyMsg(btn) {
+  const bubble = btn.closest('.msg').querySelector('.bubble');
+  navigator.clipboard.writeText(bubble.textContent).then(() => { btn.textContent = '已复制'; setTimeout(() => btn.textContent = '复制', 1200); });
+}
+
+function renderAll() { renderSidebar(); renderMain(); }
+
+// ==================== 发送与流式 ====================
+async function send() {
+  const question = q.value.trim();
+  if (!question || sending) return;
+  let c = conversations.find(x => x.id === activeId);
+  if (!c) {
+    c = await api('/conversations', { method: 'POST', body: '{}' });
+    conversations.unshift(c);
+    activeId = c.id;
+    messages = [];
+  }
+  // 第一句作为会话标题
+  if (messages.length === 0) {
+    const title = question.slice(0, 28);
+    c.title = title;
+    api('/conversations/' + c.id, { method: 'PATCH', body: JSON.stringify({ title }) });
+  }
+  const version = document.getElementById('versionSel2').value;
+
+  const userMsg = { role: 'user', content: question, sources: [] };
+  const aiMsg = { role: 'assistant', content: '', sources: [], streaming: true };
+  messages.push(userMsg, aiMsg);
+  renderSidebar();
+  renderMain();
+  q.value = '';
+  sending = true;
+  askBtn.disabled = true;
+  hint.textContent = '生成中…';
+  curMsg = aiMsg;
+  const started = Date.now();
+
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, version, conversationId: c.id })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const chunk = buffer.slice(0, idx); buffer = buffer.slice(idx + 2);
+        handle(chunk);
+      }
+    }
+    if (buffer) handle(buffer);
+  } catch (e) {
+    aiMsg.content = '请求失败：' + e.message;
+  } finally {
+    aiMsg.streaming = false;
+    curMsg = null;
+    sending = false;
+    askBtn.disabled = false;
+    hint.textContent = `耗时 ${((Date.now() - started) / 1000).toFixed(1)}s`;
+    renderMessages();
+  }
+}
+
+function handle(chunk) {
+  let event = 'message';
+  const dataLines = [];
+  for (const line of chunk.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5));
+  }
+  const data = dataLines.join('\n');
+  if (event === 'sources') {
+    try { curMsg.sources = JSON.parse(data); } catch (e) { curMsg.sources = []; }
+  } else if (data) {
+    curMsg.content += data;
+  }
+  if (!renderScheduled) {
+    renderScheduled = true;
+    requestAnimationFrame(() => { renderScheduled = false; renderMessages(); });
+  }
+}
+
+// ==================== 事件绑定 ====================
+document.getElementById('newChatBtn').onclick = newConversation;
+document.getElementById('newFolderBtn').onclick = newFolder;
+askBtn.onclick = send;
+document.getElementById('renameBtn').onclick = () => activeId && renameConversation(activeId);
+document.getElementById('deleteConvBtn').onclick = () => activeId && deleteConversation(activeId);
+q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+q.addEventListener('input', () => { q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, 180) + 'px'; });
+searchInput.addEventListener('input', renderSidebar);
+
+sidebarScroll.addEventListener('click', e => {
+  const convEl = e.target.closest('[data-conv]');
+  const menuBtn = e.target.closest('[data-conv-menu]');
+  const toggle = e.target.closest('[data-folder-toggle]');
+  const del = e.target.closest('[data-folder-del]');
+  if (del) { deleteFolder(del.dataset.folderDel); return; }
+  if (toggle) {
+    const f = folders.find(x => x.id === toggle.dataset.folderToggle);
+    if (f) { f._open = !f._open; renderSidebar(); }
+    return;
+  }
+  if (menuBtn) { showConvMenu(menuBtn.dataset.convMenu, menuBtn.getBoundingClientRect()); return; }
+  if (convEl) { selectConversation(convEl.dataset.conv); }
+});
+
+function showConvMenu(id, rect) {
+  closeMenu();
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.id = 'ctxMenu';
+  let html = `<div class="mi" data-act="rename">✎ 重命名</div>
+    <div class="mi sub" data-act="move">📁 移动到文件夹 <span>›</span></div>`;
+  html += folders.map(f => `<div class="mi" data-act="move-to" data-fid="${f.id}" style="padding-left:26px">${esc(f.name)}</div>`).join('');
+  html += `<div class="mi" data-act="move-to" data-fid="" style="padding-left:26px">（未分组）</div>
+    <div class="sep"></div>
+    <div class="mi danger" data-act="del">🗑 删除</div>`;
+  menu.innerHTML = html;
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = rect.left + 'px';
+  document.body.appendChild(menu);
+  menu.addEventListener('click', ev => {
+    const act = ev.target.dataset.act;
+    closeMenu();
+    if (act === 'rename') renameConversation(id);
+    else if (act === 'del') deleteConversation(id);
+    else if (act === 'move-to') moveConversation(id, ev.target.dataset.fid || null);
+  });
+}
+function closeMenu() { document.getElementById('ctxMenu')?.remove(); }
+document.addEventListener('click', e => { if (!e.target.closest('.menu') && !e.target.closest('[data-conv-menu]')) closeMenu(); });
+
+document.getElementById('suggestions').innerHTML = SUGGESTIONS.map(s =>
+  `<button class="sug" data-q="${esc(s.q)}"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></button>`
+).join('');
+document.getElementById('suggestions').addEventListener('click', e => {
+  const b = e.target.closest('.sug');
+  if (!b) return;
+  q.value = b.dataset.q;
+  send();
+});
+
+// ==================== 启动 ====================
+(async function init() {
+  try {
+    folders = await api('/folders');
+    conversations = await api('/conversations');
+    if (conversations.length) activeId = conversations[0].id;
+  } catch (e) {
+    document.getElementById('sidebarFoot').textContent = '加载失败：' + e.message;
+  }
+  renderAll();
+  if (activeId) {
+    try {
+      const data = await api('/conversations/' + activeId);
+      messages = data.messages || [];
+      renderMessages();
+    } catch (e) { /* ignore */ }
+  }
+})();
+</script>
+</body>
+</html>
