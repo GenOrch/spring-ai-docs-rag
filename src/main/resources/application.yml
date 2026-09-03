@@ -1,0 +1,131 @@
+# =============================================================================
+# Default data source: LOCAL AsciiDoc corpus (versioned Spring AI reference).
+# One-time setup — clone the docs source first (directory layout = version):
+#   git clone --depth 1 --filter=blob:none --sparse --branch v2.0.1 \
+#       https://github.com/spring-projects/spring-ai.git data/raw/spring-ai/2.0.1
+#   git -C data/raw/spring-ai/2.0.1 sparse-checkout set spring-ai-docs
+#   git clone --depth 1 --filter=blob:none --sparse --branch v1.1.8 \
+#       https://github.com/spring-projects/spring-ai.git data/raw/spring-ai/1.1.8
+#   git -C data/raw/spring-ai/1.1.8 sparse-checkout set spring-ai-docs
+# =============================================================================
+
+spring:
+  application:
+    name: spring-ai-docs-rag
+  config:
+    # Load a local (gitignored) .env file so secrets persist on this machine without being
+    # committed. `[.properties]` tells Spring to parse the KEY=value lines as properties even
+    # though the file has no .properties extension. `optional:` keeps startup working when the
+    # file is absent (e.g. a fresh clone / CI).
+    import: optional:file:.env[.properties]
+  datasource:
+    # PostgreSQL + pgvector — the DEFAULT vector-store backend. Point PGVECTOR_URL at your
+    # PostgreSQL instance (managed or self-hosted) with the pgvector extension enabled.
+    url: ${PGVECTOR_URL:jdbc:postgresql://localhost:5432/rag}
+    username: ${PGVECTOR_USER:rag}
+    password: ${PGVECTOR_PASSWORD:rag}
+  ai:
+    openai:
+      # DashScope OpenAI-compatible endpoint (Qwen chat + text-embedding).
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      chat:
+        options:
+          model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
+          temperature: 0.3
+      embedding:
+        options:
+          model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v3}
+    vectorstore:
+      # Vector store backend: PostgreSQL + pgvector — a real, shared, durable vector
+      # database. Requires the datasource above (PGVECTOR_URL / USER / PASSWORD).
+      type: pgvector
+      pgvector:
+        dimensions: 1024
+        distance-type: cosine-distance
+        index-type: hnsw
+        initialize-schema: true
+        table-name: vector_store
+        # Chunk ids are position-stable sha256 hex strings (version#url#index), not UUIDs.
+        # Without this the
+        # driver rejects them with "invalid input syntax for type uuid".
+        id-type: TEXT
+    mcp:
+      server:
+        # Model Context Protocol server: exposes the rag_* @Tool methods (see mcp package) so
+        # an AI agent can inspect logs/status and drive Q&A. Streamable-HTTP transport at /mcp.
+        name: spring-ai-docs-rag
+        version: 0.1.0
+        type: SYNC
+        protocol: STREAMABLE
+
+app:
+  rag:
+    ingest-on-startup: ${RAG_INGEST_ON_STARTUP:false}
+    data-dir: ${RAG_DATA_DIR:./data}
+    # DashScope text-embedding-v3 rejects a single request with more than 10 inputs:
+    #   400 InternalError.Algo.InvalidParameter: batch size is invalid,
+    #   it should not be larger than 10
+    # Spring AI's default TokenCountBatchingStrategy caps by tokens (8191), not by
+    # document count, so the whole corpus would otherwise end up in one request. Add in small batches.
+    embed-batch-size: ${RAG_EMBED_BATCH_SIZE:10}
+    # Vector table name.
+    table-name: ${RAG_TABLE_NAME:vector_store}
+    # Generation system prompt. Kept in config so it can be tuned without recompiling.
+    system-prompt: |
+      You are a documentation assistant. Answer the user's question ONLY using the
+      numbered context below. If the context does not contain the answer, say clearly
+      that you do not know; do not invent facts. When you use a piece of context,
+      cite it inline with its [n] number.
+    # Token required for /admin calls from a remote host; loopback calls are always allowed.
+    # Unset means remote admin calls are rejected.
+    admin-token: ${RAG_ADMIN_TOKEN:}
+    # Timeout for a single /ask SSE stream.
+    ask-timeout-ms: ${RAG_ASK_TIMEOUT_MS:120000}
+    chunk:
+      default-chunk-size: 500
+      min-chunk-size-chars: 100
+      min-chunk-length-to-embed: 10
+      max-num-chunks: 10000
+    retrieve:
+      vector-top-k: 20
+      keyword-top-k: 20
+      fusion-top-n: 20
+      rrf-k: 60
+    rerank:
+      enabled: true
+      endpoint: ${DASHSCOPE_RERANK_ENDPOINT:https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank}
+      model: ${DASHSCOPE_RERANK_MODEL:gte-rerank-v2}
+      top-n: 5
+    mcp:
+      # Audit/operation log ring buffers (see observability/audit/AuditStore): bound the in-memory
+      # trail read by the rag_logs MCP tool; newest entries evict the oldest.
+      audit-buffer-size: ${RAG_MCP_AUDIT_BUFFER_SIZE:500}
+      operation-buffer-size: ${RAG_MCP_OPERATION_BUFFER_SIZE:1000}
+      # Durable append-only request audit trail (JSON lines). Optional; no rotation in v1.
+      audit-file-enabled: ${RAG_MCP_AUDIT_FILE_ENABLED:false}
+      audit-file: ${RAG_MCP_AUDIT_FILE:data/audit/requests.jsonl}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    distribution:
+      # Emit histogram buckets (not just count/sum) so latency percentiles (P50/P95/P99)
+      # can be computed with histogram_quantile in Prometheus/Grafana.
+      percentiles-histogram:
+        http.server.requests: true
+        http.client.requests: true
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+
+server:
+  port: 8080

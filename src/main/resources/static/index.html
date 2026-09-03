@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spring AI RAG · 问答演示</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a22; --panel2: #1c212b; --border: #2a303c;
+    --fg: #e7eaf0; --dim: #8b93a7; --accent: #4c8dff; --accent2: #6ba6ff;
+    --code-bg: #0a0c10; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+         background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px 60px; }
+
+  header { margin-bottom: 24px; }
+  header h1 { font-size: 24px; margin: 0 0 6px; font-weight: 650; }
+  header .sub { color: var(--dim); font-size: 13px; margin: 0; }
+  header .sub code { color: var(--accent2); background: var(--panel2); padding: 1px 6px; border-radius: 4px; }
+
+  .composer { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+  textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--fg);
+             border-radius: 8px; padding: 12px; font-size: 15px; resize: vertical; min-height: 68px;
+             font-family: inherit; line-height: 1.5; }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  select { background: var(--bg); border: 1px solid var(--border); color: var(--fg); border-radius: 8px;
+           padding: 8px 12px; font-size: 13px; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 26px;
+           font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+  button:hover:not(:disabled) { background: var(--accent2); }
+  button:disabled { opacity: .45; cursor: default; }
+  .hint { color: var(--dim); font-size: 12px; margin-left: auto; }
+
+  .answer { margin-top: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+            padding: 20px; min-height: 120px; font-size: 15px; }
+  .answer .placeholder { color: var(--dim); }
+  .answer .cursor { display: inline-block; color: var(--accent); animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .answer h2, .answer h3, .answer h4 { margin: 16px 0 8px; line-height: 1.4; }
+  .answer h2 { font-size: 17px; } .answer h3 { font-size: 16px; } .answer h4 { font-size: 15px; }
+  .answer p { margin: 8px 0; }
+  .answer code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+                 padding: 1px 6px; font-size: 13px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .answer pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+                padding: 12px 14px; overflow-x: auto; }
+  .answer pre code { background: none; border: 0; padding: 0; font-size: 13px; }
+  .answer ul, .answer ol { margin: 8px 0; padding-left: 22px; }
+  .answer strong { font-weight: 650; }
+  .answer .cite { font-size: 11px; }
+  .answer .cite a { color: var(--accent2); text-decoration: none; font-weight: 700; }
+  .answer .cite a:hover { text-decoration: underline; }
+
+  .sources { margin-top: 16px; }
+  .sources h2 { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; }
+  .source { display: flex; gap: 8px; align-items: baseline; background: var(--panel); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 12px; margin: 6px 0; font-size: 13px; }
+  .source sup { color: var(--accent2); font-weight: 700; }
+  .source a { color: var(--accent); text-decoration: none; word-break: break-all; }
+  .source a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Spring AI 2.0 RAG</h1>
+    <p class="sub">混合检索 <code>向量 + BM25 + RRF</code> → 重排 <code>gte-rerank-v2</code> → <code>Qwen</code> 带引用生成</p>
+  </header>
+
+  <div class="composer">
+    <textarea id="q" placeholder="用中文或英文提问 Spring AI 文档，例如：How does ChatClient work?"></textarea>
+    <div class="controls">
+      <select id="version">
+        <option value="">全部版本</option>
+        <option value="2.0.1">v2.0.1</option>
+        <option value="1.1.8">v1.1.8</option>
+      </select>
+      <button id="ask">提问</button>
+      <span class="hint" id="hint">Enter 发送 · Shift+Enter 换行</span>
+    </div>
+  </div>
+
+  <div class="answer" id="answer"><span class="placeholder">回答将显示在这里…</span></div>
+  <div class="sources" id="sources"></div>
+</div>
+
+<script>
+const q = document.getElementById('q');
+const askBtn = document.getElementById('ask');
+const versionSel = document.getElementById('version');
+const answerEl = document.getElementById('answer');
+const sourcesEl = document.getElementById('sources');
+const hintEl = document.getElementById('hint');
+
+let fullAnswer = '';
+let sourceList = [];
+let renderScheduled = false;
+
+function scheduleRender() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(() => { renderScheduled = false; renderAnswer(); });
+}
+
+function renderAnswer(showCursor = true) {
+  const cursor = showCursor ? '<span class="cursor">▌</span>' : '';
+  answerEl.innerHTML = renderMarkdown(fullAnswer) + cursor;
+}
+
+async function ask() {
+  const question = q.value.trim();
+  const version = versionSel.value;
+  if (!question) return;
+  askBtn.disabled = true;
+  fullAnswer = '';
+  sourceList = [];
+  sourcesEl.innerHTML = '';
+  answerEl.innerHTML = '<span class="cursor">▌</span>';
+  const started = Date.now();
+
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, version })
+    });
+    if (!resp.ok) { throw new Error('HTTP ' + resp.status); }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        handle(chunk);
+      }
+    }
+    if (buffer) handle(buffer); // flush a trailing event without a final blank line
+  } catch (e) {
+    answerEl.textContent = '请求失败：' + e.message;
+  } finally {
+    askBtn.disabled = false;
+    hintEl.textContent = `耗时 ${((Date.now() - started) / 1000).toFixed(1)}s`;
+  }
+}
+
+function handle(chunk) {
+  let event = 'message';
+  const dataLines = [];
+  for (const line of chunk.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5)); // keep token whitespace
+  }
+  const data = dataLines.join('\n');
+  if (event === 'sources') {
+    renderSources(data);
+  } else if (data) {
+    fullAnswer += data;
+    scheduleRender();
+  }
+}
+
+function renderSources(data) {
+  try {
+    sourceList = JSON.parse(data);
+    sourcesEl.innerHTML = '<h2>Sources</h2>' + sourceList.map((s, i) =>
+      `<div class="source"><sup>[${i + 1}]</sup> <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.title || s.url)}</a></div>`
+    ).join('');
+  } catch (e) {
+    sourcesEl.innerHTML = '<h2>Sources</h2>' + String(data);
+  }
+  renderAnswer(false); // 让 [n] 引用链接到来源；流式结束，隐藏光标
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderMarkdown(text) {
+  // 先按代码块切分，代码块内不渲染行内格式
+  const parts = text.split(/```/);
+  let html = '';
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      html += renderBlocks(parts[i]);
+    } else {
+      const code = parts[i].replace(/^[^\n]*\n/, '');
+      html += '<pre><code>' + escapeHtml(code) + '</code></pre>';
+    }
+  }
+  return html;
+}
+
+// 块级解析：按空行切成段落/列表/标题，避免 <li> 混进 <p> 或 <br> 塞进列表
+function renderBlocks(text) {
+  return text.split(/\n{2,}/).map(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return '';
+    // 无序列表：-、*、• 统一为 <li>，包进 <ul>
+    if (/^[-*•]\s+/.test(lines[0])) {
+      return '<ul>' + lines.map(l =>
+        '<li>' + renderInline(l.replace(/^[-*•]\s+/, '')) + '</li>'
+      ).join('') + '</ul>';
+    }
+    // 标题
+    const h = lines[0].match(/^#{1,4}\s+(.+)$/);
+    if (h) {
+      const rest = lines.slice(1).map(renderInline).join('<br>');
+      return '<h3>' + renderInline(h[1]) + '</h3>' + (rest ? '<p>' + rest + '</p>' : '');
+    }
+    // 普通段落：单换行转 <br>
+    return '<p>' + lines.map(renderInline).join('<br>') + '</p>';
+  }).join('');
+}
+
+function renderInline(text) {
+  let t = escapeHtml(text);
+  // 先保护行内代码，避免 [n] 引用误匹配代码块里的数字
+  const codeSpans = [];
+  t = t.replace(/`([^`]+)`/g, (m, code) => {
+    codeSpans.push(code);
+    return '\u0000' + (codeSpans.length - 1) + '\u0000';
+  });
+  // [n] 引用 → 上标链接
+  t = t.replace(/\[(\d+)\]/g, (m, n) => {
+    const src = sourceList[parseInt(n, 10) - 1];
+    return src
+      ? `<sup class="cite"><a href="${src.url}" target="_blank" rel="noopener">[${n}]</a></sup>`
+      : `<sup class="cite">[${n}]</sup>`;
+  });
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // 恢复行内代码
+  t = t.replace(/\u0000(\d+)\u0000/g, (m, i) => '<code>' + codeSpans[+i] + '</code>');
+  return t;
+}
+
+askBtn.addEventListener('click', ask);
+q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+
+// Deep-link: ?q=<question> auto-fills and asks on load (also used to render the demo screenshot).
+const deepQ = new URLSearchParams(location.search).get('q');
+if (deepQ) { q.value = deepQ; ask(); }
+</script>
+</body>
+</html>
